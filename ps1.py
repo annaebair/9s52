@@ -33,6 +33,7 @@ def get_data(datafile):
 			non_setosa_labels.append(1)
 	return np.array(all_data), np.array(all_labels), np.array(setosa_data), np.array(versicolor_data), np.array(virginica_data), np.array(non_setosa_labels)
 
+
 def perceptron_iteration(weight_matrix, num_data_points, data, labels, learning_rate):
 	correct = 0
 	for i in range(num_data_points):
@@ -56,21 +57,45 @@ def perceptron_iteration(weight_matrix, num_data_points, data, labels, learning_
 def perceptron(data, labels, learning_rate):
 	num_data_points, num_attributes = data.shape
 	weight_matrix = np.random.rand(num_attributes)
-	iterations = 10
+	iterations = 100
+	proportion_correct = []
 	for i in range(iterations):
 		weight_matrix, num_correct = perceptron_iteration(weight_matrix, num_data_points, data, labels, learning_rate)
+		proportion_correct.append(num_correct/150)
 		print(f"Iteration {i+1}: {num_correct} correctly classified")
+	return proportion_correct
+	
+
+def plot_perceptrons(data, labels, learning_rates):
+	all_proportions_correct = []
+	for r in learning_rates:
+		proportion_correct = perceptron(data, labels, r)
+		all_proportions_correct.append(proportion_correct)
+
+	plt.subplot(311)
+	plt.plot(np.arange(100), all_proportions_correct[0])
+	plt.title("Rate of Convergence with Learning Rate 0.01")
+	plt.xlabel("Iterations")
+	plt.ylabel("Proportion Correct")
+	plt.subplot(312)
+	plt.plot(np.arange(100), all_proportions_correct[1])
+	plt.title("Rate of Convergence with Learning Rate 0.0001")
+	plt.xlabel("Iterations")
+	plt.ylabel("Proportion Correct")
+	plt.subplot(313)
+	plt.plot(np.arange(100), all_proportions_correct[2])
+	plt.title("Rate of Convergence with Learning Rate 0.00001")
+	plt.xlabel("Iterations")
+	plt.ylabel("Proportion Correct")
+	plt.show()
 
 
 def sanger(data, learning_rate):
 	centered_data = StandardScaler().fit_transform(data)
 	num_data_points, num_attributes = centered_data.shape
 	weight_matrix = np.random.rand(num_attributes, num_attributes)
-	print("original weight matrix:\n")
-	print(weight_matrix)
-	# print(centered_data)
 	output = np.matmul(centered_data, weight_matrix)
-	for it in range(150000):
+	for it in range(300000):
 		d = np.random.randint(0, 150)
 		x = centered_data[d] # one input instance
 		v = output[d] # one output instance
@@ -87,100 +112,199 @@ def sanger(data, learning_rate):
 	print("final weight matrix: \n")
 	print(weight_matrix)
 	covariance_mat = np.cov(np.transpose(centered_data))
-	print("data covariance matrix: \n")
-	print(covariance_mat)
 	eigenval, eigenvec = np.linalg.eig(covariance_mat)
-	print("eigenvectors: \n")
-	print(eigenvec)
-	print("covariance between weight matrix: \n")
-	weight_cov = np.cov(weight_matrix)
-	print(weight_cov)
-	pca = PCA().fit_transform(covariance_mat)
-	print("pca of matrix covariance: \n")
-	print(pca)
-	diag_sum = 0
-	#okay to use sklearn to find variance explained
-	for i in range(4):
-		diag_sum += abs(eigenvec[i][i])
-	for i in range(4):
-		proportion = eigenvec[i][i]/diag_sum
-		print(f"{i}: {proportion}")
+	total_eigs = sum(eigenval)
+	reverse_sorted_eigenvals = sorted(eigenval, reverse=True)
+	amt_of_var = [eig/total_eigs for eig in reverse_sorted_eigenvals]
+	cumulative_variance = sorted(np.cumsum(amt_of_var))
 
-	# print("pca of weight covariance: \n")
-	# print(PCA().fit_transform(weight_cov))
+	plt.plot(([1,2,3,4]), cumulative_variance)
+	plt.ylim(0,1.1)
+	plt.ylabel("Amount of Variance explained")
+	plt.xlabel("Principal Component")
+	plt.xticks([1,2,3,4], ("PC1", "PC2", "PC3", "PC4"))
+	plt.title("Cumulative Variance Explained by each Principal Component")
+	plt.show()
 
-	# columns should be directions of PCs; col 1 is the largest PC
+	covariance_mat = np.cov(np.transpose(centered_data))
+	eigenval, eigenvec = np.linalg.eig(covariance_mat)
 
-def adaline(data, labels, learning_rate):
-	num_data_points, num_attributes = data.shape
-	weight_matrix = np.random.rand(4)
-	iterations = 500
-	for i in range(num_data_points):
-		inp = data[i]
-		actual = labels[i]
-		observed = np.matmul(inp, weight_matrix)
-		weight_update = learning_rate * (actual - observed) * inp
-		weight_matrix += weight_update
-		weight_matrix /= sum(weight_matrix)
-	print(weight_matrix)
-	adaline_error(data, weight_matrix, labels)
+
+def reduce_dims(data, labels, non_setosa_labels, plot=True):
+	centered_data = StandardScaler().fit_transform(data)
+	covariance_mat = np.cov(np.transpose(centered_data))
+	eigenval, eigenvec = np.linalg.eig(covariance_mat)
+	eigs = [(eigenval[i], eigenvec[:, i]) for i in range(4)]
+	sorted_eigs = sorted(eigs, reverse=True)
+	pcs = [sorted_eigs[i][1] for i in range(2)]
+	conversion = np.array(pcs)
+	projection = centered_data.dot(np.transpose(conversion))
+	setosa = []
+	versicolor = []
+	virginica = []
+	non_set = []
+	for i in range(150):
+		if labels[i] == -1:
+			setosa.append(projection[i])
+		else:
+			non_set.append(projection[i])
+
+	for i in range(100):
+		if non_setosa_labels[i] == -1:
+				versicolor.append(non_set[i])
+		else:
+			virginica.append(non_set[i])
+	setosa = np.array(setosa)
+	virginica = np.array(virginica)
+	versicolor = np.array(versicolor)
+	if plot:
+		plt.figure()
+		setosa_points = plt.scatter(setosa[:,0], setosa[:,1], c='b')
+		versicolor_points = plt.scatter(versicolor[:,0], versicolor[:,1], c='g')
+		virginica_points = plt.scatter(virginica[:,0], virginica[:,1], c='m')
+		plt.title("Iris Dataset projected onto first two PCs")
+		plt.legend((setosa_points, versicolor_points, virginica_points), ("Setosa", "Versicolor", "Virginica"))
+		plt.show()
+	return projection
+
 
 def adaline_error(data, weight_matrix, labels):
 	out = np.matmul(data, weight_matrix)
 	error = 0.5 * sum((labels - out)**2)
-	print(error)
+	return error
 
-def sofm():
-	learning_rate = 0.05
-	input_data = np.random.uniform(size=(5000, 2))
-	plt.plot(input_data[:, 0], input_data[:, 1], 'ko', markersize=2)
 
-	grid = np.random.rand(100, 2)
-	print(grid)
-	original_grid = grid.copy()
-	# plt.plot(original_grid[:, 0], original_grid[:, 1], 'ro')
-	iterations = 10
+def adaline(data, labels, learning_rate):
+	num_data_points, num_attributes = data.shape
+	weight_matrix = np.random.rand(4)
+	iterations = 501
+	errors = []
 	for it in range(iterations):
-		print(f"Iteration {it}")
-		for point in input_data:
-			#calculate distance to each grid point
-			BMU = None 
-			min_distance = np.inf
-			BMU_index = None
-			for i in range(len(grid)):
-				node = grid[i]
-				dist = euclidian_distance(point, node)
-				if dist < min_distance:
-					min_distance = dist
-					BMU = node
-					BMU_index = i
-			# update weight of BMU and surrounding neurons
-			radius = 0.05/(it+1)
-			# print(f"radius: {radius}")
-			indices = []
-			for j in range(len(grid)):
-				node = grid[j]
-				dist = euclidian_distance(BMU, node)
-				if  dist < radius:
-					# indices.append(j)
-					n = grid[j]
-					gaussian = 1/(math.sqrt(2*math.pi) * math.exp(-0.5 * dist))
-					# print(gaussian)
-					new_n = n + learning_rate * gaussian * (point - n)
-					grid[j] = new_n
-			# for ind in indices:
-			# 	n = grid[ind]
-			# 	new_n = n + learning_rate * (point - n)
-			# 	grid[ind] = new_n
+		for i in range(num_data_points):
+			inp = data[i]
+			actual = labels[i]
+			observed = np.matmul(inp, weight_matrix)
+			weight_update = learning_rate * (actual - observed) * inp
+			weight_matrix += weight_update
+			weight_matrix /= sum(weight_matrix)
+		if it % 25 == 0:
+			error = adaline_error(data, weight_matrix, labels)
+			errors.append(error)
+	xtickslabel = [i*25 for i in range(21)]
+	plt.plot(np.arange(len(errors)), errors)
+	plt.title("ADALINE Least Squares Error Over Time")
+	plt.xlabel("Iterations")
+	plt.xticks(np.arange(len(errors)), xtickslabel)
+	plt.ylabel("Error")
+	plt.show()
 	
-	# grid = np.sort(grid, axis=1)
-	# print(grid)
-	plt.plot(grid[:, 0], grid[:, 1], 'ro')
+
+def find_bmu(t, nodes, m):
+    bmu_idx = np.array([0, 0])
+    min_dist = np.inf
+    for x in range(nodes.shape[0]):
+        for y in range(nodes.shape[1]):
+            w = nodes[x, y, :].reshape(m, 1)
+            sq_dist = np.sum((w - t) ** 2)
+            if sq_dist < min_dist:
+                min_dist = sq_dist
+                index = np.array([x, y])
+    bmu = nodes[index[0], index[1], :].reshape(m, 1)
+    return (bmu, index)
+
+
+def one_dim_feature_map(data, num_nodes):
+	centered_data = StandardScaler().fit_transform(data)
+	covariance_mat = np.cov(np.transpose(centered_data))
+	eigenval, eigenvec = np.linalg.eig(covariance_mat)
+	eigs = [(eigenval[i], eigenvec[:, i]) for i in range(4)]
+	sorted_eigs = sorted(eigs, reverse=True)
+	pcs = [sorted_eigs[i][1] for i in range(2)]
+	conversion = np.array(pcs)
+	projection = centered_data.dot(np.transpose(conversion))
+	data = np.transpose(projection)
+
+	network_dimensions = np.array([num_nodes,1])
+	n_iters = 10000
+	init_learning_rate = 0.01
+	m = data.shape[0]
+	n = data.shape[1]
+
+	nodes = np.random.random((network_dimensions[0], network_dimensions[1], m))
+
+	init_radius = max(network_dimensions[0], network_dimensions[1]) / 2
+	time_constant = n_iters / np.log(init_radius)
+	for i in range(n_iters):
+		t = data[:, np.random.randint(0, n)].reshape(np.array([m, 1]))
+		bmu, bmu_index = find_bmu(t, nodes, m)
+		r = init_radius * np.exp(-i / time_constant)
+		l = init_learning_rate * np.exp(-i / n_iters)
+		for x in range(nodes.shape[0]):
+		    for y in range(nodes.shape[1]):
+		        w = nodes[x, y, :].reshape(m, 1)
+		        w_dist = np.sum((np.array([x, y]) - bmu_index) ** 2)
+		        if w_dist <= r**2:
+		            neighborhood = np.exp(-w_dist / (2* (r**2)))
+		            new_w = w + (l * neighborhood * (t - w))
+		            new_nodes = nodes[x, y, :]
+		            nodes[x, y, :] = new_w.reshape(1, 2)
+
+	final_nodes = np.squeeze(nodes, axis=1)
+	plt.scatter(data[0], data[1])
+	plt.plot(final_nodes[:, 0], final_nodes[:, 1], 'ok')
+	plt.plot(final_nodes[:, 0], final_nodes[:, 1], 'k')
+	plt.title("SOFM with 25 Nodes")
 	plt.show()
 
 
-def euclidian_distance(x, y):
-	return math.sqrt((x[0] - y[0])**2 + (x[1] - y[1])**2)
+def two_dim_feature_map():
+	# data = np.transpose(np.random.multivariate_normal([0.5, 0.5], [[1,0],[0,1]], size=5000))
+	predata = np.random.uniform(size=(2, 5000))
+	def inside_cirle(a, b):
+		return math.sqrt((a-0.5)**2 + (b-0.5)**2)
+	n_iters = 10000
+	data0 = []
+	data1 = []
+	for i in range(5000):
+		if inside_cirle(predata[0,i], predata[1,i]) <= 0.5:
+			data0.append(predata[0,i])
+			# print(predata[0,i])
+			data1.append(predata[1,i])
+	data = np.stack((np.array(data0), np.array(data1)),axis=0)
+
+	network_dimensions = np.array([10, 10])
+	
+	init_learning_rate = 0.1
+	m = data.shape[0]
+	n = data.shape[1]
+
+	nodes = np.random.random((network_dimensions[0], network_dimensions[1], m))
+
+	init_radius = max(network_dimensions[0], network_dimensions[1]) / 2
+	time_constant = n_iters / np.log(init_radius)
+	for i in range(n_iters):
+		t = data[:, np.random.randint(0, n)].reshape(np.array([m, 1]))
+		bmu, bmu_index = find_bmu(t, nodes, m)
+		r = init_radius * np.exp(-i / time_constant)
+		l = init_learning_rate * np.exp(-i / n_iters)
+		for x in range(nodes.shape[0]):
+		    for y in range(nodes.shape[1]):
+		        w = nodes[x, y, :].reshape(m, 1)
+		        w_dist = np.sum((np.array([x, y]) - bmu_index) ** 2)
+		        if w_dist <= r**2:
+		            neighborhood = np.exp(-w_dist / (2* (r**2)))
+		            new_w = w + (l * neighborhood * (t - w))
+		            new_nodes = nodes[x, y, :]
+		            nodes[x, y, :] = new_w.reshape(1, 2)
+	
+	nodes_2 = np.transpose(nodes)
+	plt.plot(data[0], data[1], 'o', markersize=2)
+	plt.plot(nodes[:, :, 0], nodes[:, :, 1], 'ok')
+	plt.plot(nodes[:, :, 0], nodes[:, :, 1], 'k')
+	plt.plot(nodes_2[0, :, :], nodes_2[1, :, :], 'k')
+	plt.title(f"SOFM Grid, {n_iters} Iterations")
+	plt.show()
+
 
 def visualize(x, y, setosa, versicolor, virginica):
 	dim_1_setosa = [row[0] for row in setosa]
@@ -196,7 +320,7 @@ def visualize(x, y, setosa, versicolor, virginica):
 	dim_3_virginica = [row[2] for row in virginica]
 	dim_4_virginica = [row[3] for row in virginica]
 
-	fig = plt.figure()
+	fig = plt.figure(num="Plots of Iris Dataset in varying dimensions")
 	plt.subplot(221)
 	setosa_points = plt.scatter(dim_1_setosa, dim_2_setosa, c='b')
 	versicolor_points = plt.scatter(dim_1_versicolor, dim_2_versicolor, c='g')
@@ -224,19 +348,25 @@ def visualize(x, y, setosa, versicolor, virginica):
 	fig.legend((setosa_points, versicolor_points, virginica_points), ("setosa", "versicolor", "virginica"))
 	plt.show()
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
 	datafile = "data.txt"
 	x, y, setosa, versicolor, virginica, non_setosa_labels = get_data(datafile)
-	learning_rate = 0.00001
+	learning_rate = 0.001
 	non_setosa_data = np.concatenate((versicolor, virginica), axis=0)
-	# print(non_setosa_data)
-	# perceptron(x, y, learning_rate)
-	# visualize(x, y, setosa, versicolor, virginica)
-	# setosa is linearly separable from the other two
-	# sanger(x, learning_rate)
-	# adaline(non_setosa_data, non_setosa_labels, learning_rate)
-	sofm()
-	# pca = PCA(n_components=2).fit_transform(x)
-	# print(pca)
 
+	'''
+	Uncomment the functions on each of the following lines to run the corresponding 
+	functions. learning_rate above may need to be adjusted for each function.
+	'''
+
+	# perceptron(x, y, learning_rate)
+	# plot_perceptrons(x, y, [0.01, 0.0001, 0.00001])
+	# visualize(x, y, setosa, versicolor, virginica)
+	#### setosa is linearly separable from the other two ####
+	# sanger(x, learning_rate)
+	# reduce_dims(x, y, non_setosa_labels)
+	# one_dim_feature_map(x, 25)
+	# two_dim_feature_map()
+	# adaline(non_setosa_data, non_setosa_labels, learning_rate)
+	# sofm()
