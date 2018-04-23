@@ -57,6 +57,7 @@ def perceptron_iteration(weight_matrix, num_data_points, data, labels, learning_
 def perceptron(data, labels, learning_rate):
 	num_data_points, num_attributes = data.shape
 	weight_matrix = np.random.rand(num_attributes)
+	print(weight_matrix.shape)
 	iterations = 100
 	proportion_correct = []
 	for i in range(iterations):
@@ -360,7 +361,7 @@ if __name__ == "__main__":
 	functions. learning_rate above may need to be adjusted for each function.
 	'''
 
-	# perceptron(x, y, learning_rate)
+	perceptron(x, y, learning_rate)
 	# plot_perceptrons(x, y, [0.01, 0.0001, 0.00001])
 	# visualize(x, y, setosa, versicolor, virginica)
 	#### setosa is linearly separable from the other two ####
