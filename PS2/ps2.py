@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import math
 from sklearn import preprocessing
 
+
 def read_data(filename):
 	data = []
 	with open(filename) as f:
@@ -14,46 +15,73 @@ def read_data(filename):
 	return np.array(data)
 
 
-def backprop(data, labels, hidden_units=20, learning_rate=0.1):
+def backprop(data, labels, epochs, test_data, test_labels, hidden_units=20, learning_rate=0.1, momentum=None):
+	
+	# Random initialization of weight matrices, centered at 0
 	weights_jk = 2 * np.random.rand(784, hidden_units) - 1
 	weights_ij = 2 * np.random.rand(hidden_units, 10) - 1
 
-	epochs = 50
+	train_correct = []
+	test_correct = []
+
 	for epoch in range(epochs):
+
+		# Randomly shuffle order in which to choose data points
 		data_order = np.arange(len(data))
 		np.random.shuffle(data_order)
 		num_correct = 0
+
 		for index in data_order:
 
+			# Get a random data point and corresponding target label
 			data_point = data[index]
 			target = labels[index]
 
+			# Input to and output from hidden layer
 			hidden_in = np.matmul(data_point, weights_jk)
 			hidden_out = sigmoid(hidden_in)
 
+			# Input to and output from output layer
 			out_in = np.matmul(hidden_out, weights_ij)
 			out_out = sigmoid(out_in)
 
+			# Convert target label to a binary vector
 			target_vec = vectorize_label(target)
+
+			# Convert output vector to a winner take all binary vector
 			out_vec = winner(out_out)
 
+			# Correct classification if output binary vector matches target binary vector
 			if np.array_equal(target_vec, out_vec):
 				num_correct += 1
 				continue
 
+			# If incorrect classification, calculate the error
 			error = target_vec - out_out
 
+			# Calculate weight update for weight matrix W (hidden to output)
 			delta_i = sigmoid_derivative(out_in) * error
 			delta_wij = learning_rate * np.outer(delta_i, hidden_out)
 
+			# Calculate weight update for weight matrix w (input to hidden)
 			delta_j = sigmoid_derivative(hidden_in) * np.matmul(weights_ij, delta_i)
 			delta_wjk = learning_rate * np.outer(delta_j, data_point)
 
-			weights_ij += delta_wij.T
-			weights_jk += delta_wjk.T
+			if momentum:
+				# Update rule including momentum term
+				weights_ij = momentum * weights_ij + delta_wij.T
+				weights_jk = momentum * weights_jk + delta_wjk.T
+			else:
+				# Update rule if no momentum
+				weights_ij += delta_wij.T
+				weights_jk += delta_wjk.T
 
-		print("Epoch ", epoch, ": ", num_correct)
-	return weights_jk, weights_ij
+		train_correct.append(1-num_correct/3000)
+		test_performance = test_network(weights_jk, weights_ij, test_data, test_labels)
+		test_correct.append(1-test_performance/3000)
+		print("Epoch ", epoch, ' | Train: ',num_correct/3000, ' | Test: ', test_performance/3000)
+
+	return train_correct, test_correct
 
 	
 def test_network(weights_jk, weights_ij, test_data, test_labels):
@@ -74,16 +102,18 @@ def test_network(weights_jk, weights_ij, test_data, test_labels):
 		if np.array_equal(target_vec, out_vec):
 			num_correct += 1
 			
-	print(num_correct)
+	return num_correct
 
 
 def winner(x):
+	# Converts an output vector to a binary winner-take-all vector of the same shape
 	zeros = np.zeros(x.shape)
 	zeros[np.argmax(x)] = 1
 	return zeros
 
 
 def vectorize_label(x):
+	# Converts an integer label to a binary 10x1 vector
 	a = np.zeros(10)
 	a[int(x)] = 1
 	return a
@@ -112,17 +142,29 @@ if __name__ == '__main__':
 	test_labels = np.squeeze(test_labels)
 	test_labels[test_labels==[10]] = [0]
 
-	data1 = np.expand_dims(data[0], axis=1)
-	weights_jk, weights_ij = backprop(np.array(data), labels)
-	test_network(weights_jk, weights_ij, test_data, test_labels)
+	epochs = 100
+	hidden_units = 20
+	learning_rate = 0.1
+	momentum=0.9
+
+	# Run backprop
+	train, test = backprop(data, labels, epochs, test_data, test_labels, hidden_units, learning_rate)
+
+	# Plot train and test performance
+	plt.plot(train, label="Train Performance")
+	plt.plot(test, label="Test Performance")
+	plt.xlabel("Iterations")
+	plt.ylabel("Error Rate")
+	plt.title("Train and Test Performance on MNIST")
+	plt.legend()
+	# plt.show()
 
 	
-	### Code to show Images ###
-
-	# for i in range(len(labels)):
-	# 	# if labels[i] == [10]:
-	# 		datarow = np.reshape(data[i], (28, 28)).T 
-	# 		plt.figure()
-	# 		plt.imshow(datarow, cmap='gray_r')
-	# 		plt.title(labels[i])
-	# 		plt.show()
+	# Code to show MNIST Images
+	
+	for i in range(len(labels)):
+		datarow = np.reshape(data[i], (28, 28)).T 
+		plt.figure()
+		plt.imshow(datarow, cmap='gray_r')
+		plt.title(labels[i])
+		plt.show()
